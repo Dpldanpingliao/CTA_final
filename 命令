@@ -1,0 +1,255 @@
+library(tidyverse) # loads dplyr, ggplot2, and others
+library(stringr) # to handle text elements
+library(tidytext) # includes set of functions useful for manipulating text
+library(topicmodels) # to estimate topic models
+library(gutenbergr) # to get text data
+library(scales)
+library(tm)
+library(ggthemes) # to make your plots look nice
+library(readr)
+library(quanteda)
+library(quanteda.textmodels)
+library(ggplot2)
+library(tidyverse)
+
+data <- read.csv("/Users/irene/Desktop/RDL-Oscar award /oscar_speech_csv.csv")
+stop_words
+
+# get columns for artist name and year, omitting NAs
+babynameOscar <- data %>%
+  select(Winner, Year) %>%
+  na.omit()
+
+# generate new column with just the artist's (author's) first name
+gendes$name <- sub(" .*", "", gendes$artist)
+
+colnames(data)
+
+#exercise1 尝试去除停止词
+tidy_data <- data %>% 
+  mutate(desc = tolower()) %>%
+  unnest_tokens(word, desc) %>%
+  filter(str_detect(word, "[a-z]"))
+
+tidy_newstopword1<- tidy_data %>%
+  filter(!word %in% stop_words$word)
+
+stop_words
+
+tidy_newstopword1 %>%
+  count(word, sort = TRUE)
+
+tidy_newstopword1$gender <- ifelse(tidy_newstopword1$Category %in% c("Actor", "Actor in a Leading Role","Actor in a Supporting Role"), "male",
+                         ifelse(tidy_newstopword1$Category %in% c("Actress", "Actress in a Leading Role","Actress in a Supporting Role"), "female", NA))
+
+tidy_words <- tidy_newstopword1 %>%
+  mutate(speechword = ifelse(gender=="female", "Speech1", "Speech2")) %>%
+  unnest_tokens(word, Speech) %>%
+  filter(!is.na(word)) %>%
+  count(speechword, word, sort = TRUE) %>%
+  ungroup() %>%
+  anti_join(stop_words)
+
+#DocumentTermMatrix
+tidy_dtm <- tidy_words4 %>%
+  cast_dtm(speechword, word, n)
+
+tm::inspect(tidy_dtm)
+
+#开始10个主题图的可视化
+tidy_lda <- LDA(tidy_dtm, k = 10, control = list(seed = 1234))
+tidy_topics <- tidy(tidy_lda, matrix = "beta")
+
+head(tidy_topics, n = 10)
+
+tidy_top_terms <- tidy_topics %>%
+  group_by(topic) %>%
+  top_n(10, beta) %>%
+  ungroup() %>%
+  arrange(topic, -beta)
+
+tidy_top_terms %>%
+  mutate(term = reorder_within(term, beta, topic, sep = " ")) %>%
+  ggplot(aes(beta, term, fill = factor(topic))) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~ topic, scales = "free", ncol = 4) +
+  scale_y_reordered() +
+  theme_tufte(base_family = "Helvetica")
+
+install.packages("tufte")
+library(tufte)
+#重新使用新的没有missing value的dataset
+
+tidy_book <- cleaned_tidy %>%
+  mutate(speechword = ifelse(gender=="female", "Speech1", "Speech2")) %>%
+  mutate(word = str_extract(word, "[a-z']+")) %>%
+  count(speechword, word) %>%
+  group_by(speechword) %>%
+  mutate(proportion = n / sum(n)) %>% 
+  select(-n) %>% 
+  spread(speechword, proportion)
+
+ggplot(tidy_book, aes(x = Speech1, y = Speech2, color = abs(Speech1 - Speech2))) +
+  geom_abline(color = "gray40", lty = 2) +
+  geom_jitter(alpha = 0.1, size = 2.5, width = 0.3, height = 0.3) +
+  geom_text(aes(label = word), check_overlap = TRUE, vjust = 1.5) +
+  scale_x_log10(labels = percent_format()) +
+  scale_y_log10(labels = percent_format()) +
+  scale_color_gradient(limits = c(0, 0.001), low = "darkslategray4", high = "gray75") +
+  theme_tufte(base_family = "Arial") +
+  theme(legend.position="none", 
+        strip.background = element_blank(), 
+        strip.text.x = element_blank()) +
+  labs(x = "female", y = "male") +
+  coord_equal()
+
+#去除缺失值
+library(tidyverse)
+
+cleaned_tidy<- tidy_newstopword1 %>%
+  drop_na()
+cleaned_tidy2 <- cleaned_tidy%>%
+  mutate(word = tolower(word)) %>%
+  # 删除标点符号和无意义符号
+  mutate(word = gsub("[^[:alnum:]\\s]", "", word)) %>%
+  # number useless
+  mutate(word = gsub("\\d+", "", word)) %>%
+  unnest_tokens(word, word) %>%
+  # 排除单个字母和不包含字母的单词
+  filter(str_length(word) > 1, str_detect(word, "[a-z]")) %>%
+  filter(!word %in% stop_words_updated$word)
+
+#figure1 account different gender's number
+
+oscar_speeches_summary <- data %>%
+  group_by(gender) %>%
+  summarize(count = n())
+
+oscar_speeches_table <- oscar_speeches_summary %>%
+  pivot_wider(names_from = gender, values_from = count)
+
+oscar_speeches_table %>%
+  pivot_longer(cols = c("male", "female"), names_to = "gender", values_to = "Count") %>%
+  ggplot(aes(x = gender, y = Count, fill = gender)) +
+  geom_col(width = 0.5, position = "dodge", color = "white") +
+  geom_text(aes(label = Count), position = position_dodge(width = 0.5), vjust = -0.5) +
+  scale_fill_manual(values = c("male" = "#69b3a2", "female" = "#e86a92")) +
+  labs(title = "Oscar Winners' Speeches by Gender",
+       x = "",
+       y = "Number of Winners",
+       fill = "Gender") +
+  theme_classic() +
+  theme(legend.position = "bottom",
+        axis.line = element_line(size = 1.2, color = "black"),
+        axis.title.y = element_text(size = 14, margin = margin(r = 20)),
+        axis.text = element_text(size = 12, color = "black"),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank())
+
+#导出tidy_word
+write.csv(tidy_words, "/Users/irene/Desktop/Oscar-gender/tidy_words.csv", row.names = FALSE)
+
+#继续删除不必要的词语,tidy_words3是用在DTM中
+tidy_words3 <- tidy_words %>%
+  mutate(word = tolower(word)) %>%
+  # 删除标点符号和无意义符号
+  mutate(word = gsub("[^[:alnum:]\\s]", "", word)) %>%
+  # number useless
+  mutate(word = gsub("\\d+", "", word)) %>%
+  unnest_tokens(word, word) %>%
+  # 排除单个字母和不包含字母的单词
+  filter(str_length(word) > 1, str_detect(word, "[a-z]")) %>%
+  filter(!word %in% stop_words$word)
+
+tidy_words3 %>%
+  count(word, sort = TRUE)
+
+#emotional direction
+afinn_lines <- readLines("AFINN-111.txt", encoding = "UTF-8")
+afinn_df <- tibble::enframe(afinn_lines, name = "word", value = "score")
+
+#add new stopwords
+custom_stop_words <- c("time", "tonight", "gonna", "feel")
+stop_words_updated <- bind_rows(stop_words, tibble(word = custom_stop_words, lexicon = "custom"))
+
+tidy_words4 <- tidy_words3 %>%
+  mutate(word = tolower(word)) %>%
+  # 删除标点符号和无意义符号
+  mutate(word = gsub("[^[:alnum:]\\s]", "", word)) %>%
+  # number useless
+  mutate(word = gsub("\\d+", "", word)) %>%
+  unnest_tokens(word, word) %>%
+  # 排除单个字母和不包含字母的单词
+  filter(str_length(word) > 1, str_detect(word, "[a-z]")) %>%
+  filter(!word %in% stop_words_updated$word)
+
+tidy_words4 %>%
+  count(word, sort = TRUE)
+# add sub_year group
+subyear <- cleaned_tidy2%>%
+  mutate(Year = str_sub(Year, start = 1, end = 4))
+# add 10-year group
+subyear_10year <- subyear %>%
+  mutate(Year = as.numeric(Year),
+         Decade = cut(Year, breaks = seq(1930, 2020, 10), right = FALSE, include.lowest = TRUE))
+tocq <- data %>%
+  filter(!is.na(text))
+
+# Divide into 10year subgroup(更全面平衡的看matrix)
+subyear_10year <- subyear_10year %>%
+  mutate(Year = as.numeric(substr(Year, 1, 4)),
+         Decade = cut(Year, breaks = seq(1930, 2020, by = 10), labels = c("1930s", "1940s", "1950s", "1960s", "1970s", "1980s", "1990s", "2000s", "2010s"), include.lowest = TRUE))
+
+sub_10yearlittlegroup <- subyear_10year %>%
+  mutate(speechword = ifelse(gender=="female", "Speech1", "Speech2")) %>%
+  group_by(Decade) %>%
+  mutate(Decade = first(Decade)) %>%
+  ungroup() %>%
+  unite(document, Decade, gender)
+
+sub10yearlittle_word_counts <- sub_10yearlittlegroup %>%
+  anti_join(stop_words) %>%
+  count(document, word, sort = TRUE) %>%
+  ungroup()
+
+sub10yearlittle_word_counts 
+
+# Cast into DTM format for LDA analysis
+
+sub10year_dtm <- sub10yearlittle_word_counts  %>%
+  cast_dtm(document, word, n)
+
+tm::inspect(sub10year_dtm)
+
+#data visualize_10 year topic change
+tidy_sub10year_dtm <- sub10year_dtm %>%
+  tidy()
+
+# 提取每个十年最常用的前10个单词
+top_words <- sub10yearlittle_word_counts %>%
+  group_by(document) %>%
+  top_n(10, n) %>%
+  ungroup()
+
+# 创建条形图
+ggplot(top_words, aes(reorder_within(word, n, document), n, fill = document)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~document, scales = "free_y", ncol = 2) +
+  scale_x_reordered() +
+  coord_flip() +
+  labs(x = "Term", y = "Frequency") +
+  theme_minimal()
+
+#word cloud
+install.packages("wordcloud2")
+library(wordcloud2)
+
+# 创建每个十年的词云
+for (doc in unique(top_words$document)) {
+  doc_words <- top_words %>% filter(document == doc)
+  print(paste("Word Cloud for", doc))
+  wordcloud2(data = doc_words, size = 0.5, shape = "diamond", backgroundColor = "white", color = "random-dark")
+}
+
+wordcloud2(tidy_text_data, size = 0.8, color = "random-light", backgroundColor = "white", fontFamily = "Arial", figPath = NULL)
